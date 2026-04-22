@@ -1,4 +1,4 @@
-package univ.flopbox.auth;
+package univ.flopbox.authService;
 
 /**
  * Stocke le token JWT en mémoire pour toute la session.

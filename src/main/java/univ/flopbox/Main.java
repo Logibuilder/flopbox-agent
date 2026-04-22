@@ -1,13 +1,14 @@
 package univ.flopbox;
 
-import univ.flopbox.Server.ServerService;
+import univ.flopbox.model.FtpItem;
+import univ.flopbox.service.DirectoryService;
+import univ.flopbox.service.ServerService;
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.api.FlopboxApiClient;
-import univ.flopbox.auth.AuthService;
-import univ.flopbox.auth.TokenStore;
+import univ.flopbox.authService.AuthService;
+import univ.flopbox.authService.TokenStore;
 import univ.flopbox.model.Server;
 
-import java.security.Provider;
 import java.util.List;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
@@ -20,13 +21,20 @@ public class Main {
         TokenStore tokenStore = new TokenStore();
         AuthService auth      = new AuthService(api, tokenStore);
         ServerService serverService = new ServerService(api, tokenStore);
-
+        DirectoryService directoryService = new DirectoryService(api, tokenStore);
         auth.login("assane.kane@gmail.com", "ass");
 
 
-// Vérification
         System.out.println("Token stocké : " + tokenStore.get().substring(0, 20) + "...");
         List<Server> list = serverService.getServers();
-        list.forEach(s -> System.out.println(s));
+        list.forEach(System.out::println);
+
+        String ftpHost = "ftp.free.fr"; // ou l'alias configuré
+        String ftpPath = "/";
+        String ftpUser = "anonymous";
+        String ftpPass = "anonymous";
+        List<FtpItem> list1 = directoryService.listDirectory(ftpHost, ftpPath, ftpUser, ftpPass);
+        list1.forEach(System.out::println);
+
     }
 }

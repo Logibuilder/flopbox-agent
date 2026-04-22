@@ -1,17 +1,18 @@
-package univ.flopbox.Server;
+package univ.flopbox.service;
 
 import univ.flopbox.api.FlopboxApi;
-import univ.flopbox.auth.TokenStore;
-import univ.flopbox.model.Server;
+import univ.flopbox.authService.TokenStore;
+import univ.flopbox.model.FtpItem;
 
 import java.util.List;
 
-public class ServerService {
+public class DirectoryService {
+
 
     private final FlopboxApi api;
     private final TokenStore tokenStore;
 
-    public ServerService(FlopboxApi api, TokenStore tokenStore) {
+    public DirectoryService(FlopboxApi api, TokenStore tokenStore) {
         this.api = api;
         this.tokenStore = tokenStore;
     }
@@ -20,10 +21,10 @@ public class ServerService {
      * Récupère la liste des serveurs FTP enregistrés dans FlopBox.
      * Nécessite d'être authentifié au préalable.
      */
-    public List<Server> getServers() {
+    public List<FtpItem> listDirectory(String host, String path, String ftpUser, String ftpPassword) {
         if (!tokenStore.hasToken()) {
             throw new IllegalStateException("Non authentifié : appelez login() avant getServers().");
         }
-        return api.getServers(tokenStore.get());
+        return api.listDirectory(tokenStore.get(), host, path, ftpUser, ftpPassword );
     }
 }

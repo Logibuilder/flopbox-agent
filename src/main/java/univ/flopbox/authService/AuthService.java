@@ -1,4 +1,4 @@
-package univ.flopbox.auth;
+package univ.flopbox.authService;
 
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.model.LoginRequest;

@@ -1,6 +1,9 @@
 package univ.flopbox.api;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import univ.flopbox.model.ApiResponse;
+import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.LoginRequest;
 
 import java.net.http.HttpClient;
@@ -75,6 +78,32 @@ public class FlopboxApiClient implements FlopboxApi{
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Erreur lors de la récupération des serveurs", e);
+        }
+    }
+
+
+    public List<FtpItem> listDirectory(String token, String host, String path, String ftpUser, String ftpPassword) {
+        try {
+            String url = BASE_URL + "/servers/" + host + "/directories?path=" + path;
+            HttpRequest request = HttpUtils.createGetRequest(url, token, ftpUser, ftpPassword);
+
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("Echec listDirectory : HTTP " + response.statusCode());
+            }
+
+            ApiResponse<List<FtpItem>> apiResponse = objectMapper.readValue(
+                    response.body(),
+                    new TypeReference<>() {});
+
+            return apiResponse.data();
+
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur listDirectory sur " + host + path, e);
         }
     }
 }

@@ -28,4 +28,16 @@ public class HttpUtils {
                 .GET()
                 .build();
     }
+
+    public static HttpRequest createGetRequest(String url, String bearerToken, String ftpUser,String ftpPassword) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(DEFAULT_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + bearerToken)
+                .header("X-FTP-Username", ftpUser)
+                .header("X-FTP-Password", ftpPassword)
+                .GET()
+                .build();
+    }
 }
