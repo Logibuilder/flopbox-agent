@@ -2,6 +2,9 @@ package univ.flopbox.api;
 
 
 import univ.flopbox.model.LoginRequest;
+import univ.flopbox.model.Server;
+
+import java.util.List;
 
 /**
  * Contrat d'accès à la plateforme FlopBox.
@@ -9,4 +12,5 @@ import univ.flopbox.model.LoginRequest;
 public interface FlopboxApi {
 
     String login(LoginRequest loginRequest);
+    List<Server> getServers(String token);
 }

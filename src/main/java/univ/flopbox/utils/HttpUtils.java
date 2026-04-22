@@ -18,4 +18,14 @@ public class HttpUtils {
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
     }
+
+    public static HttpRequest createGetRequest(String url, String bearerToken) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(DEFAULT_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + bearerToken)
+                .GET()
+                .build();
+    }
 }
