@@ -33,7 +33,7 @@ public class Main {
         List<Server> list = serverService.getServers();
         list.forEach(System.out::println);
 
-        String ftpHost = "localhost"; // ou l'alias configuré
+        String ftpHost = "ftp.free.fr"; // ou l'alias configuré
         String ftpPath = "";
         String ftpUser = "anonymous";
         String ftpPass = "anonymous";

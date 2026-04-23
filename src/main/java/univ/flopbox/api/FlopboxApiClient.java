@@ -134,17 +134,22 @@ public class FlopboxApiClient implements FlopboxApi{
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
                 .thenAccept(response -> {
                     if (response.statusCode() != 200) {
-                        throw new RuntimeException("Echec downloadFile : HTTP " + response.statusCode());
+                        System.err.println("[ERREUR] Impossible de télécharger " + remoteFile.name() + " : HTTP " + response.statusCode());
+                        return;
                     }
                     Path localPath = SyncService.createDirectory(host, remoteFile);
 
                     try (InputStream is = response.body()) {
                         Files.copy(is, localPath, StandardCopyOption.REPLACE_EXISTING);
-                        System.out.println("[SYNC] Téléchargé : " + localPath);
+                        System.out.println("[OK] Terminé : " + localPath);
                     } catch (IOException e) {
-                        throw new RuntimeException("Erreur d'écriture : " + localPath, e);
+                        System.err.println("[ERREUR DISQUE] " + localPath + " : " + e.getMessage());
                     }
 
+                })
+                .exceptionally(ex -> {
+                    System.err.println("[ERREUR CRITIQUE] Échec asynchrone pour " + remoteFile.name() + " : " + ex.getMessage());
+                    return null; // Permet à la chaîne de se terminer "proprement"
                 });
 
     }
