@@ -2,6 +2,7 @@ package univ.flopbox;
 
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.service.DirectoryService;
+import univ.flopbox.service.FileService;
 import univ.flopbox.service.ServerService;
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.api.FlopboxApiClient;
@@ -10,7 +11,6 @@ import univ.flopbox.authService.TokenStore;
 import univ.flopbox.model.Server;
 import univ.flopbox.service.SyncService;
 
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -24,16 +24,20 @@ public class Main {
         FlopboxApi api        = new FlopboxApiClient();
         TokenStore tokenStore = new TokenStore();
         AuthService auth      = new AuthService(api, tokenStore);
+        if (!auth.login("assane.kane@gmail.com", "ass")) {
+            System.out.println("Connection échouée");
+            return;
+        }
         ServerService serverService = new ServerService(api, tokenStore);
         DirectoryService directoryService = new DirectoryService(api, tokenStore);
-        auth.login("assane.kane@gmail.com", "ass");
+
 
 
         System.out.println("Token stocké : " + tokenStore.get().substring(0, 20) + "...");
         List<Server> list = serverService.getServers();
         list.forEach(System.out::println);
 
-        String ftpHost = "ftp.free.fr"; // ou l'alias configuré
+        String ftpHost = "localhost"; // ou l'alias configuré
         String ftpPath = "";
         String ftpUser = "anonymous";
         String ftpPass = "anonymous";
@@ -66,6 +70,24 @@ public class Main {
             System.out.println("Téléchargements en cours...");
             CompletableFuture.allOf(downloads.toArray(new CompletableFuture[0])).join();
             System.out.println("Tous les fichiers ont été téléchargés avec succès.");
+        }
+
+        FileService fileService = new FileService(api, tokenStore);
+
+        System.out.println("Début de l'upload...");
+        try {
+            CompletableFuture<Void> uploadTask = fileService.uploadFile(
+                    ftpHost,
+                    "project_key",
+                    ftpUser,
+                    ftpPass
+            );
+
+            // Attendre la fin de l'upload avant de fermer le programme
+            uploadTask.join();
+            System.out.println("Fin du test d'upload.");
+        } catch (Exception e) {
+            System.out.println("Note : Le test d'upload a échoué : " + e.getMessage());
         }
     }
 }

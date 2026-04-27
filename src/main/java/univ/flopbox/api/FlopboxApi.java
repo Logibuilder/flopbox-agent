@@ -1,10 +1,12 @@
 package univ.flopbox.api;
 
 
+import univ.flopbox.model.ApiResponse;
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.LoginRequest;
 import univ.flopbox.model.Server;
 
+import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -17,4 +19,6 @@ public interface FlopboxApi {
     List<Server> getServers(String token);
     List<FtpItem> listDirectory(String token, String host, String path, String ftpUser, String ftpPassword);
     CompletableFuture<Void> downloadFile(String token, String host, FtpItem item, String ftpUser, String ftpPassword);
+
+    CompletableFuture<Void> uploadFile(String token, String host, String path, String ftpUser, String ftpPassword) throws FileNotFoundException;
 }

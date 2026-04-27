@@ -9,5 +9,5 @@ public class TokenStore {
 
     public void save(String token) { this.token = token; }
     public String get()            { return token; }
-    public boolean hasToken()      { return token != null; }
+    public boolean hasToken()      { return token.isEmpty() || token != null; }
 }

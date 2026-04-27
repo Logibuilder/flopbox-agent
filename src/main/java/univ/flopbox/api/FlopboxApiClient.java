@@ -6,9 +6,10 @@ import univ.flopbox.model.ApiResponse;
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.LoginRequest;
 
-import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,7 +17,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
@@ -60,11 +60,12 @@ public class FlopboxApiClient implements FlopboxApi{
                     .path("accessToken")
                     .asText();
 
-        } catch (RuntimeException e) {
-            throw e;
+        } catch (ConnectException e) {
+            System.out.println("Impossible de contacter le serveur FlopBox. Vérifiez qu'il est bien lancé");
         } catch (Exception e) {
-            throw new RuntimeException("Erreur lors de l'authentification", e);
+            System.out.println("Erreur lors de l'authentification "+ e.getMessage());
         }
+        return "";
     }
 
     @Override
@@ -149,8 +150,38 @@ public class FlopboxApiClient implements FlopboxApi{
                 })
                 .exceptionally(ex -> {
                     System.err.println("[ERREUR CRITIQUE] Échec asynchrone pour " + remoteFile.name() + " : " + ex.getMessage());
-                    return null; // Permet à la chaîne de se terminer "proprement"
+                    return null;
                 });
 
+    }
+
+    @Override
+    public CompletableFuture<Void> uploadFile(String token, String host, String path, String ftpUser, String ftpPassword) throws  FileNotFoundException{
+        String url = BASE_URL + "/servers/" + host + "/files?path=" + path;
+
+
+        try {
+
+            HttpRequest request = HttpUtils.createPostRequest(url, token, Path.of(path), ftpUser, ftpPassword);
+
+            return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200 || response.statusCode() == 201) {
+                            System.out.println("[OK] Fichier envoyé avec succès : " + path);
+                        } else {
+                            System.out.println("Échec de l'envoi (HTTP " + response.statusCode() + ")");
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        System.out.println("Note : Erreur lors de l'envoi de " + path + " : " + ex.getMessage());
+                        return null;
+                    });
+        }catch (FileNotFoundException e) {
+            System.out.println("Erreur lors de la préparation de l'envoi : " + e.getMessage());
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            System.out.println("Erreur lors de la préparation de l'envoi : " + e.getMessage());
+            return CompletableFuture.completedFuture(null);
+        }
     }
 }

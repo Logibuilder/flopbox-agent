@@ -2,8 +2,10 @@ package univ.flopbox.service;
 
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.authService.TokenStore;
+import univ.flopbox.model.ApiResponse;
 import univ.flopbox.model.FtpItem;
 
+import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -32,6 +34,15 @@ public class FileService {
             throw new IllegalStateException("Non authentifié : appelez login() avant getServers().");
         }
 
-        return api.downloadFile(tokenStore.get(),host, remoteFile,ftpUser, ftpPassword);
+        return api.downloadFile(tokenStore.get(), host, remoteFile,ftpUser, ftpPassword);
+    }
+
+
+    public CompletableFuture<Void> uploadFile(String host, String path, String ftpUser, String ftpPassword) throws FileNotFoundException {
+        if (!tokenStore.hasToken()) {
+            throw new IllegalStateException("Non authentifié : appelez login() avant getServers().");
+        }
+
+        return api.uploadFile(tokenStore.get(), host, path, ftpUser, ftpPassword);
     }
 }

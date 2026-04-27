@@ -3,6 +3,8 @@ package univ.flopbox.authService;
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.model.LoginRequest;
 
+import java.util.Objects;
+
 public class AuthService {
 
     private final FlopboxApi api;
@@ -19,9 +21,9 @@ public class AuthService {
      * @param mail     adresse email FlopBox
      * @param password mot de passe FlopBox
      */
-    public void login(String mail, String password) {
+    public boolean login(String mail, String password) {
         String token = api.login(new LoginRequest(mail, password));
         tokenStore.save(token);
-        System.out.println("Connecte a FlopBox : OK");
+        return !token.isEmpty();
     }
 }

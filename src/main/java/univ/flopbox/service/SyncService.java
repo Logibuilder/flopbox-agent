@@ -42,4 +42,8 @@ public class SyncService {
 
         return localPath;
     }
+
+    public void syncServer(String host) {
+
+    }
 }
