@@ -180,7 +180,7 @@ public class FlopboxApiClient implements FlopboxApi{
             System.out.println("Erreur lors de la préparation de l'envoi : " + e.getMessage());
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
-            System.out.println("Erreur lors de la préparation de l'envoi : " + e.getMessage());
+            System.out.println("Erreur lors de la préparation de l'envoi  : " + e.getMessage());
             return CompletableFuture.completedFuture(null);
         }
     }
