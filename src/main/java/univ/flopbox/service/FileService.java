@@ -38,11 +38,11 @@ public class FileService {
     }
 
 
-    public CompletableFuture<Void> uploadFile(String host, String path, String ftpUser, String ftpPassword) throws FileNotFoundException {
+    public CompletableFuture<Void> uploadFile(String host, String localPath, String remotePath, String ftpUser, String ftpPassword) throws FileNotFoundException {
         if (!tokenStore.hasToken()) {
             throw new IllegalStateException("Non authentifié : appelez login() avant getServers().");
         }
 
-        return api.uploadFile(tokenStore.get(), host, path, ftpUser, ftpPassword);
+        return api.uploadFile(tokenStore.get(), host, localPath, remotePath, ftpUser, ftpPassword);
     }
 }

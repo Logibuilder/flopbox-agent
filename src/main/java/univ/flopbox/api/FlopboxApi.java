@@ -20,5 +20,5 @@ public interface FlopboxApi {
     List<FtpItem> listDirectory(String token, String host, String path, String ftpUser, String ftpPassword);
     CompletableFuture<Void> downloadFile(String token, String host, FtpItem item, String ftpUser, String ftpPassword);
 
-    CompletableFuture<Void> uploadFile(String token, String host, String path, String ftpUser, String ftpPassword) throws FileNotFoundException;
+    CompletableFuture<Void> uploadFile(String token, String host, String localPath,String remotePath, String ftpUser, String ftpPassword) throws FileNotFoundException;
 }

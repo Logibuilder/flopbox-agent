@@ -24,6 +24,6 @@ public class AuthService {
     public boolean login(String mail, String password) {
         String token = api.login(new LoginRequest(mail, password));
         tokenStore.save(token);
-        return !token.isEmpty();
+        return !token.isEmpty() || token.isBlank();
     }
 }

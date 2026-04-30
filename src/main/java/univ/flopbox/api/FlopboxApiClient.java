@@ -156,24 +156,24 @@ public class FlopboxApiClient implements FlopboxApi{
     }
 
     @Override
-    public CompletableFuture<Void> uploadFile(String token, String host, String path, String ftpUser, String ftpPassword) throws  FileNotFoundException{
-        String url = BASE_URL + "/servers/" + host + "/files?path=" + path;
+    public CompletableFuture<Void> uploadFile(String token, String host, String localPath,String remotePath, String ftpUser, String ftpPassword) throws  FileNotFoundException{
+        String url = BASE_URL + "/servers/" + host + "/files?path=" + remotePath;
 
 
         try {
 
-            HttpRequest request = HttpUtils.createPostRequest(url, token, Path.of(path), ftpUser, ftpPassword);
+            HttpRequest request = HttpUtils.createPostRequest(url, token, Path.of(localPath), ftpUser, ftpPassword);
 
             return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
                         if (response.statusCode() == 200 || response.statusCode() == 201) {
-                            System.out.println("[OK] Fichier envoyé avec succès : " + path);
+                            System.out.println("[OK] Fichier envoyé avec succès : " + remotePath);
                         } else {
                             System.out.println("Échec de l'envoi (HTTP " + response.statusCode() + ")");
                         }
                     })
                     .exceptionally(ex -> {
-                        System.out.println("Note : Erreur lors de l'envoi de " + path + " : " + ex.getMessage());
+                        System.out.println("Erreur lors de l'envoi de " + remotePath + " : " + ex.getMessage());
                         return null;
                     });
         }catch (FileNotFoundException e) {

@@ -1,5 +1,7 @@
 package univ.flopbox.service;
 
+import univ.flopbox.api.FlopboxApi;
+import univ.flopbox.authService.TokenStore;
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.Type;
 
@@ -7,10 +9,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Locale;
 
 public class SyncService {
 
     private static final  String ROOT_SYNC_DIR = "flopbox_data";
+
+    private final FlopboxApi api;
+    private final TokenStore tokenStore;
+
+    public SyncService(FlopboxApi api, TokenStore tokenStore) {
+        this.api = api;
+        this.tokenStore = tokenStore;
+    }
 
     /**
      * Crée un dossier localement en respectant l'arborescence du serveur.
@@ -43,7 +58,63 @@ public class SyncService {
         return localPath;
     }
 
-    public void syncServer(String host) {
+    public void syncMiroir(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+        Path localServerBase = Paths.get(ROOT_SYNC_DIR, host);
+        String firstPath = remoteItems.get(0).path();
+        String remoteDirPath = firstPath.contains("/") ? firstPath.substring(0, firstPath.lastIndexOf("/")) : "/";
+        for (FtpItem remoteItem : remoteItems) {
+            if (remoteItem.type() == Type.FILE) {
+                String cleanPath = remoteItem.path().startsWith("/") ? remoteItem.path().substring(1) : remoteItem.path();
+                Path localFile = localServerBase.resolve(cleanPath);
 
+                if (!Files.exists(localFile)) {
+                    System.out.println("[SYNC] Nouveau fichier distant : ");
+                    api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword);
+                    // déplacer le fichier dans le dossier deleted au niveau du serveur, car à l'utilisation de cette fonction, on suppose que le serveur est déja puller
+                } else {
+                    compareAndSync(host,localFile, remoteItem, ftpUser, ftpPassword);
+                }
+            }
+        }
+
+        try (var stream = Files.list(localServerBase)) {
+            List<Path> localFiles = stream.filter(Files::isRegularFile).toList();
+
+            for (Path localFile : localFiles) {
+                String fileName = localFile.getFileName().toString();
+                boolean existsRemote = remoteItems.stream().anyMatch(ri -> ri.name().equals(fileName));
+
+                if (!existsRemote) {
+                    // On utilise le path du dossier déduit plus haut pour l'upload
+                    String remoteFilePath = (remoteDirPath.endsWith("/") ? remoteDirPath : remoteDirPath + "/") + fileName;
+                    System.out.println("[SYNC] Nouveau fichier local détecté : " + fileName);
+                    api.uploadFile(tokenStore.get(), host,localFile.toString(), remoteFilePath, ftpUser, ftpPassword);
+                }
+            }
+        } catch (IOException e) {
+            // Dossier peut ne pas exister au premier pull
+        }
+    }
+
+    private void compareAndSync(String host, Path localFile, FtpItem remoteItem, String ftpUser, String ftpPassword) {
+        try {
+            long localTime = Files.getLastModifiedTime(localFile).toMillis();
+
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
+
+            long remoteTime = ZonedDateTime.parse(remoteItem.lastModified(), formatter)
+                    .toInstant()
+                    .toEpochMilli();
+
+            if (localTime > remoteTime + 2000) {
+                System.out.println("[SYNC] Version locale plus récente -> Upload : " + remoteItem.name());
+                api.uploadFile(tokenStore.get(), host,localFile.toString(), remoteItem.path(), ftpUser, ftpPassword);
+            } else if (remoteTime > localTime + 2000) {
+                System.out.println("[SYNC] Version distante plus récente -> Download : " + remoteItem.name());
+                api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword);
+            }
+        } catch (Exception e) {
+            System.out.println("Note : Synchronisation de " + remoteItem.name() + " échouée : " + e.getMessage());
+        }
     }
 }

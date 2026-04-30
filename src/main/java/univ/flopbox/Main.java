@@ -13,81 +13,80 @@ import univ.flopbox.service.SyncService;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
     public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
+
         FlopboxApi api        = new FlopboxApiClient();
         TokenStore tokenStore = new TokenStore();
         AuthService auth      = new AuthService(api, tokenStore);
+
         if (!auth.login("assane.kane@gmail.com", "ass")) {
             System.out.println("Connection échouée");
             return;
         }
+
         ServerService serverService = new ServerService(api, tokenStore);
         DirectoryService directoryService = new DirectoryService(api, tokenStore);
 
-
-
         System.out.println("Token stocké : " + tokenStore.get().substring(0, 20) + "...");
-        List<Server> list = serverService.getServers();
-        list.forEach(System.out::println);
 
-        String ftpHost = "localhost"; // ou l'alias configuré
+        // Variables pour cibler UNIQUEMENT localhost
+        String ftpHost = "localhost";
         String ftpPath = "";
         String ftpUser = "anonymous";
         String ftpPass = "anonymous";
+
         List<FtpItem> list1 = directoryService.listDirectory(ftpHost, ftpPath, ftpUser, ftpPass);
         list1.forEach(System.out::println);
-        System.out.println(SyncService.createDirectory(list.getFirst().host(), list1.getFirst()));
 
-
-        CopyOnWriteArrayList<CompletableFuture<Void>> downloads = new CopyOnWriteArrayList<>();
-
-        // Boucle de traitement de l'arborescence récupérée
-        for (FtpItem item : list1) {
-            // Création de l'arborescence (Dossier ou parents d'un fichier)
-            SyncService.createDirectory(ftpHost, item);
-
-            // Si c'est un fichier, on lance le téléchargement
-            if (item.type() == univ.flopbox.model.Type.FILE) {
-                CompletableFuture<Void> ddl = (api).downloadFile(
-                        tokenStore.get(),
-                        ftpHost,
-                        item,
-                        ftpUser,
-                        ftpPass
-                );
-                downloads.add(ddl);
-            }
+        if(!list1.isEmpty()) {
+            System.out.println(SyncService.createDirectory(ftpHost, list1.getFirst()));
         }
 
-        if (!downloads.isEmpty()) {
-            System.out.println("Téléchargements en cours...");
-            CompletableFuture.allOf(downloads.toArray(new CompletableFuture[0])).join();
-            System.out.println("Tous les fichiers ont été téléchargés avec succès.");
-        }
-
+        // --- TEST D'UPLOAD INITIAL (optionnel, vous pouvez le commenter) ---
         FileService fileService = new FileService(api, tokenStore);
-
         System.out.println("Début de l'upload...");
         try {
             CompletableFuture<Void> uploadTask = fileService.uploadFile(
                     ftpHost,
                     "project_key",
+                    "/",
                     ftpUser,
                     ftpPass
             );
-
-            // Attendre la fin de l'upload avant de fermer le programme
             uploadTask.join();
             System.out.println("Fin du test d'upload.");
         } catch (Exception e) {
             System.out.println("Note : Le test d'upload a échoué : " + e.getMessage());
         }
+
+        // --- DÉMARRAGE DE L'AGENT DE SYNCHRONISATION (Restreint à Localhost) ---
+        SyncService syncService = new SyncService(api, tokenStore);
+
+        System.out.println("\n--- DÉMARRAGE DE L'AGENT DE SYNCHRONISATION FLOPBOX ---");
+
+        java.util.concurrent.ScheduledExecutorService scheduler =
+                java.util.concurrent.Executors.newScheduledThreadPool(1);
+
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                System.out.println("\n[CYCLE] Démarrage d'un nouveau cycle de synchronisation sur LOCALHOST...");
+
+                // MODIFICATION ICI : On ne boucle plus sur tous les serveurs.
+                // On utilise directement la variable ftpHost ("localhost")
+
+                // 1. On liste le dossier courant (ici la racine "/")
+                List<FtpItem> remoteItems = directoryService.listDirectory(ftpHost, "/", ftpUser, ftpPass);
+
+                // 2. On lance le miroir uniquement pour localhost
+                syncService.syncMiroir(ftpHost, remoteItems, ftpUser, ftpPass);
+
+                System.out.println("[CYCLE] Fin du cycle. Prochaine vérification dans 60 secondes.");
+
+            } catch (Exception e) {
+                System.err.println("Erreur lors du cycle : " + e.getMessage());
+            }
+        }, 0, 60, java.util.concurrent.TimeUnit.SECONDS);
     }
 }
