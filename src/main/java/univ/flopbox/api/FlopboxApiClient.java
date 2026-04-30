@@ -18,8 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -143,6 +147,16 @@ public class FlopboxApiClient implements FlopboxApi{
                     try (InputStream is = response.body()) {
                         Files.copy(is, localPath, StandardCopyOption.REPLACE_EXISTING);
                         System.out.println("[OK] Terminé : " + localPath);
+
+                        try {
+                            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
+                            long remoteTime = ZonedDateTime.parse(remoteFile.lastModified(), formatter).toInstant().toEpochMilli();
+                            Files.setLastModifiedTime(localPath, FileTime.fromMillis(remoteTime));
+                            System.out.println("[INFO] Date alignée pour : " + localPath.getFileName());
+                        } catch (IOException e) {
+                            System.out.println("Note : Impossible d'aligner la date pour " + localPath.getFileName());
+                        }
+
                     } catch (IOException e) {
                         System.err.println("[ERREUR DISQUE] " + localPath + " : " + e.getMessage());
                     }
