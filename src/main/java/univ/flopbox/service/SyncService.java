@@ -13,6 +13,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -116,7 +117,31 @@ public class SyncService {
                 api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword);
             }
         } catch (Exception e) {
-            System.out.println("Note : Synchronisation de " + remoteItem.name() + " échouée : " + e.getMessage());
+            System.out.println("Synchronisation de " + remoteItem.name() + " échouée : " + e.getMessage());
+        }
+    }
+
+    public void syncServer(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+        if (remoteItems == null || remoteItems.isEmpty()) return;
+
+        // Synchroniser les fichiers du dossier courant
+        syncMiroir(host, remoteItems, ftpUser, ftpPassword);
+
+        // Explorer les sous-dossiers
+        for (FtpItem item : remoteItems) {
+            if (item.type() == Type.DIRECTORY) {
+                try {
+                    System.out.println("[DIR] Exploration de : " + item.path());
+                    // Créer le dossier local avant de lister
+                    createDirectory(host, item);
+
+                    // Lister le sous-dossier
+                    List<FtpItem> subItems = api.listDirectory(tokenStore.get(), host, item.path(), ftpUser, ftpPassword);
+                    syncServer(host, subItems, ftpUser, ftpPassword);
+                } catch (Exception e) {
+                    System.out.println("[INFO] Dossier non accessible ou vide (ignoré) : " + item.path());
+                }
+            }
         }
     }
 

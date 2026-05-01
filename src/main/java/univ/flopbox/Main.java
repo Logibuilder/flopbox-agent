@@ -69,23 +69,39 @@ public class Main {
         java.util.concurrent.ScheduledExecutorService scheduler =
                 java.util.concurrent.Executors.newScheduledThreadPool(1);
 
+//        scheduler.scheduleAtFixedRate(() -> {
+//            try {
+//                System.out.println("\n[CYCLE] Démarrage d'un nouveau cycle de synchronisation sur LOCALHOST...");
+//
+//                // MODIFICATION ICI : On ne boucle plus sur tous les serveurs.
+//                // On utilise directement la variable ftpHost ("localhost")
+//
+//                // 1. On liste le dossier courant (ici la racine "/")
+//                List<FtpItem> remoteItems = directoryService.listDirectory(ftpHost, "/", ftpUser, ftpPass);
+//
+//                // 2. On lance le miroir uniquement pour localhost
+//                syncService.syncMiroir(ftpHost, remoteItems, ftpUser, ftpPass);
+//
+//                System.out.println("[CYCLE] Fin du cycle. Prochaine vérification dans 60 secondes.");
+//
+//            } catch (Exception e) {
+//                System.err.println("Erreur lors du cycle : " + e.getMessage());
+//            }
+//        }, 0, 60, java.util.concurrent.TimeUnit.SECONDS);
+
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                System.out.println("\n[CYCLE] Démarrage d'un nouveau cycle de synchronisation sur LOCALHOST...");
+                System.out.println("\n[CYCLE] Démarrage du cycle récursif sur : " + ftpHost);
 
-                // MODIFICATION ICI : On ne boucle plus sur tous les serveurs.
-                // On utilise directement la variable ftpHost ("localhost")
-
-                // 1. On liste le dossier courant (ici la racine "/")
+                // 1. On récupère TOUT le contenu de la racine "/"
                 List<FtpItem> remoteItems = directoryService.listDirectory(ftpHost, "/", ftpUser, ftpPass);
 
-                // 2. On lance le miroir uniquement pour localhost
-                syncService.syncMiroir(ftpHost, remoteItems, ftpUser, ftpPass);
+                // 2. On lance la synchro totale (récursive)
+                syncService.syncServer(ftpHost, remoteItems, ftpUser, ftpPass);
 
-                System.out.println("[CYCLE] Fin du cycle. Prochaine vérification dans 60 secondes.");
-
+                System.out.println("[CYCLE] Fin du cycle.");
             } catch (Exception e) {
-                System.err.println("Erreur lors du cycle : " + e.getMessage());
+                System.err.println("Erreur : " + e.getMessage());
             }
         }, 0, 60, java.util.concurrent.TimeUnit.SECONDS);
     }
