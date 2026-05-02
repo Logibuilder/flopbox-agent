@@ -2,6 +2,8 @@ package univ.flopbox.api;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import univ.flopbox.model.ApiResponse;
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.LoginRequest;
@@ -31,15 +33,26 @@ import univ.flopbox.model.Server;
 import univ.flopbox.service.SyncService;
 import univ.flopbox.utils.HttpUtils;
 
-public class FlopboxApiClient implements FlopboxApi{
+/**
+ * Implémentation HTTP du contrat {@link FlopboxApi}.
+ *
+ * <p>Envoie les requêtes REST au proxy FlopBox et désérialise les réponses JSON.
+ * Les transferts de fichiers (upload/download) sont effectués de manière asynchrone
+ * via {@link java.net.http.HttpClient#sendAsync}.</p>
+ */
+public class FlopboxApiClient implements FlopboxApi {
 
+    private static final Logger log = LoggerFactory.getLogger(FlopboxApiClient.class);
+
+    private static final String BASE_URL = "http://localhost:8080/api/v1";
+    private static final DateTimeFormatter FTP_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
-    private final String BASE_URL = "http://localhost:8080/api/v1";
+
     /**
-     * Initialise un nouveau client API avec une configuration par défaut.
-     * Configure un délai d'attente de connexion de 10 secondes.
+     * Initialise le client avec un timeout de connexion de 10 secondes.
      */
     public FlopboxApiClient() {
         this.httpClient = HttpClient.newBuilder()
@@ -47,6 +60,10 @@ public class FlopboxApiClient implements FlopboxApi{
                 .build();
         this.objectMapper = new ObjectMapper();
     }
+
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String login(LoginRequest loginRequest) {
         try {
@@ -58,20 +75,22 @@ public class FlopboxApiClient implements FlopboxApi{
                 throw new RuntimeException("Echec connexion : HTTP " + response.statusCode());
             }
 
-            // Extraire le token depuis data.accessToken
             return objectMapper.readTree(response.body())
                     .path("data")
                     .path("accessToken")
                     .asText();
 
         } catch (ConnectException e) {
-            System.out.println("Impossible de contacter le serveur FlopBox. Vérifiez qu'il est bien lancé");
+            log.error("Impossible de contacter le serveur FlopBox : {}", e.getMessage());
         } catch (Exception e) {
-            System.out.println("Erreur lors de l'authentification "+ e.getMessage());
+            log.error("Erreur lors de l'authentification : {}", e.getMessage());
         }
         return "";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<Server> getServers(String token) {
         try {
@@ -82,9 +101,7 @@ public class FlopboxApiClient implements FlopboxApi{
                 throw new RuntimeException("Échec récupération serveurs : HTTP " + response.statusCode());
             }
 
-            // La réponse a la forme { code, message, data: [...] }
             JsonNode dataNode = objectMapper.readTree(response.body()).path("data");
-
             return objectMapper.readValue(
                     dataNode.toString(),
                     objectMapper.getTypeFactory().constructCollectionType(List.class, Server.class)
@@ -97,23 +114,22 @@ public class FlopboxApiClient implements FlopboxApi{
         }
     }
 
-
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public List<FtpItem> listDirectory(String token, String host, String path, String ftpUser, String ftpPassword) {
         try {
             String url = BASE_URL + "/servers/" + host + "/directories?path=" + path;
             HttpRequest request = HttpUtils.createGetRequest(url, token, ftpUser, ftpPassword);
-
-            HttpResponse<String> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 throw new RuntimeException("Echec listDirectory : HTTP " + response.statusCode());
             }
 
             ApiResponse<List<FtpItem>> apiResponse = objectMapper.readValue(
-                    response.body(),
-                    new TypeReference<>() {});
-
+                    response.body(), new TypeReference<>() {});
             return apiResponse.data();
 
         } catch (RuntimeException e) {
@@ -123,14 +139,20 @@ public class FlopboxApiClient implements FlopboxApi{
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Le fichier est écrit dans le répertoire de synchronisation local via
+     * {@link SyncService#createDirectory}. La date de modification locale est
+     * ensuite alignée sur la date distante pour éviter de faux positifs lors
+     * des cycles de synchronisation suivants.</p>
+     */
+    @Override
     public CompletableFuture<Void> downloadFile(String token, String host, FtpItem remoteFile, String ftpUser, String ftpPassword) {
+        String rawPath = remoteFile.path().startsWith("/")
+                ? remoteFile.path().substring(1)
+                : remoteFile.path();
 
-        String rawPath = remoteFile.path();
-        if (rawPath.startsWith("/")) {
-            rawPath = rawPath.substring(1);
-        }
-
-        // Encodage du chemin propre
         String encodedPath = URLEncoder.encode(rawPath, StandardCharsets.UTF_8);
         String url = BASE_URL + "/servers/" + host + "/files?path=" + encodedPath;
 
@@ -139,73 +161,77 @@ public class FlopboxApiClient implements FlopboxApi{
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
                 .thenAccept(response -> {
                     if (response.statusCode() != 200) {
-                        System.err.println("[ERREUR] Impossible de télécharger " + remoteFile.name() + " : HTTP " + response.statusCode());
+                        log.warn("Téléchargement impossible [{}] HTTP {}", remoteFile.name(), response.statusCode());
                         return;
                     }
+
                     Path localPath = SyncService.createDirectory(host, remoteFile);
 
                     try (InputStream is = response.body()) {
+                        // Écriture du fichier sur le disque
                         try {
                             Files.copy(is, localPath, StandardCopyOption.REPLACE_EXISTING);
-                            System.out.println("[OK] Terminé : " + localPath);
+                            log.info("Fichier téléchargé : {}", localPath);
                         } catch (IOException e) {
                             if (e.getMessage() != null && e.getMessage().toLowerCase().contains("connection")) {
-                                System.err.println("[ERREUR RÉSEAU] Interruption pendant le téléchargement de "
-                                        + remoteFile.name() + " : " + e.getMessage());
+                                log.warn("Interruption réseau pendant le téléchargement de {} : {}", remoteFile.name(), e.getMessage());
                             } else {
-                                System.err.println("[ERREUR DISQUE] Impossible d'écrire "
-                                        + localPath + " : " + e.getMessage());
+                                log.error("Écriture impossible sur disque [{}] : {}", localPath, e.getMessage());
                             }
                             return; // ne pas aligner la date si le fichier est corrompu
                         }
 
+                        // Alignement de la date de modification locale sur la date distante
                         try {
-                            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
-                            long remoteTime = ZonedDateTime.parse(remoteFile.lastModified(), formatter).toInstant().toEpochMilli();
+                            long remoteTime = ZonedDateTime.parse(remoteFile.lastModified(), FTP_DATE_FORMAT)
+                                    .toInstant().toEpochMilli();
                             Files.setLastModifiedTime(localPath, FileTime.fromMillis(remoteTime));
-                            System.out.println("[INFO] Date alignée pour : " + localPath.getFileName());
+                            log.debug("Date alignée : {}", localPath.getFileName());
                         } catch (IOException e) {
-                            System.out.println("[WARN] Impossible d'aligner la date pour " + localPath.getFileName());
+                            log.warn("Alignement date impossible pour {} : {}", localPath.getFileName(), e.getMessage());
                         }
 
                     } catch (IOException e) {
-                        System.err.println("[ERREUR RÉSEAU] Impossible d'ouvrir le flux pour " + remoteFile.name());
+                        log.error("Ouverture flux impossible pour {} : {}", remoteFile.name(), e.getMessage());
                     }
-
                 })
                 .exceptionally(ex -> {
-                    System.err.println("[ERREUR CRITIQUE] Échec asynchrone pour " + remoteFile.name() + " : " + ex.getMessage());
+                    log.error("Échec asynchrone pour {} : {}", remoteFile.name(), ex.getMessage());
                     return null;
                 });
-
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Le contenu du fichier local est envoyé tel quel dans le corps de la requête POST.
+     * Le chemin distant est passé en paramètre de l'URL.</p>
+     */
     @Override
-    public CompletableFuture<Void> uploadFile(String token, String host, String localPath,String remotePath, String ftpUser, String ftpPassword) throws  FileNotFoundException{
+    public CompletableFuture<Void> uploadFile(String token, String host, String localPath, String remotePath, String ftpUser, String ftpPassword) throws FileNotFoundException {
         String url = BASE_URL + "/servers/" + host + "/files?path=" + remotePath;
 
-
         try {
-
             HttpRequest request = HttpUtils.createPostRequest(url, token, Path.of(localPath), ftpUser, ftpPassword);
 
             return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
                         if (response.statusCode() == 200 || response.statusCode() == 201) {
-                            System.out.println("[OK] Fichier envoyé avec succès : " + remotePath);
+                            log.info("Fichier uploadé : {}", remotePath);
                         } else {
-                            System.out.println("Échec de l'envoi (HTTP " + response.statusCode() + ")");
+                            log.warn("Upload échoué HTTP {} pour {}", response.statusCode(), remotePath);
                         }
                     })
                     .exceptionally(ex -> {
-                        System.out.println("Erreur lors de l'envoi de " + remotePath + " : " + ex.getMessage());
+                        log.error("Erreur envoi de {} : {}", remotePath, ex.getMessage());
                         return null;
                     });
-        }catch (FileNotFoundException e) {
-            System.out.println("Erreur lors de la préparation de l'envoi : " + e.getMessage());
+
+        } catch (FileNotFoundException e) {
+            log.error("Fichier local introuvable pour upload : {}", e.getMessage());
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
-            System.out.println("Erreur lors de la préparation de l'envoi  : " + e.getMessage());
+            log.error("Préparation upload impossible : {}", e.getMessage());
             return CompletableFuture.completedFuture(null);
         }
     }
