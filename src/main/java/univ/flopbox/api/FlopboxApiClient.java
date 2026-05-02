@@ -145,8 +145,19 @@ public class FlopboxApiClient implements FlopboxApi{
                     Path localPath = SyncService.createDirectory(host, remoteFile);
 
                     try (InputStream is = response.body()) {
-                        Files.copy(is, localPath, StandardCopyOption.REPLACE_EXISTING);
-                        System.out.println("[OK] Terminé : " + localPath);
+                        try {
+                            Files.copy(is, localPath, StandardCopyOption.REPLACE_EXISTING);
+                            System.out.println("[OK] Terminé : " + localPath);
+                        } catch (IOException e) {
+                            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("connection")) {
+                                System.err.println("[ERREUR RÉSEAU] Interruption pendant le téléchargement de "
+                                        + remoteFile.name() + " : " + e.getMessage());
+                            } else {
+                                System.err.println("[ERREUR DISQUE] Impossible d'écrire "
+                                        + localPath + " : " + e.getMessage());
+                            }
+                            return; // ne pas aligner la date si le fichier est corrompu
+                        }
 
                         try {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
@@ -154,11 +165,11 @@ public class FlopboxApiClient implements FlopboxApi{
                             Files.setLastModifiedTime(localPath, FileTime.fromMillis(remoteTime));
                             System.out.println("[INFO] Date alignée pour : " + localPath.getFileName());
                         } catch (IOException e) {
-                            System.out.println("Note : Impossible d'aligner la date pour " + localPath.getFileName());
+                            System.out.println("[WARN] Impossible d'aligner la date pour " + localPath.getFileName());
                         }
 
                     } catch (IOException e) {
-                        System.err.println("[ERREUR DISQUE] " + localPath + " : " + e.getMessage());
+                        System.err.println("[ERREUR RÉSEAU] Impossible d'ouvrir le flux pour " + remoteFile.name());
                     }
 
                 })

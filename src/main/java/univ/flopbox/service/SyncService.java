@@ -9,14 +9,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.FileTime;
-import java.time.Instant;
+
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.CompletableFuture;
 
 public class SyncService {
 
@@ -61,10 +58,14 @@ public class SyncService {
         return localPath;
     }
 
-    public void syncMiroir(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+    public void syncMiroir(String host,String currentRemotePath, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+
         Path localServerBase = Paths.get(ROOT_SYNC_DIR, host);
-        String firstPath = remoteItems.get(0).path();
-        String remoteDirPath = firstPath.contains("/") ? firstPath.substring(0, firstPath.lastIndexOf("/")) : "/";
+        String cleanRemotePath = currentRemotePath.startsWith("/") ? currentRemotePath.substring(1) : currentRemotePath;
+        Path localCurrentDir = cleanRemotePath.isEmpty()
+                ? localServerBase
+                : localServerBase.resolve(cleanRemotePath);
+
         for (FtpItem remoteItem : remoteItems) {
             if (remoteItem.type() == Type.FILE) {
                 String cleanPath = remoteItem.path().startsWith("/") ? remoteItem.path().substring(1) : remoteItem.path();
@@ -80,7 +81,11 @@ public class SyncService {
             }
         }
 
-        try (var stream = Files.list(localServerBase)) {
+        // Si le dossier n'existe pas encore rien à uploader
+        if (!Files.exists(localCurrentDir)) return;
+
+
+        try (var stream = Files.list(localCurrentDir)) {
             List<Path> localFiles = stream.filter(Files::isRegularFile).toList();
 
             for (Path localFile : localFiles) {
@@ -88,10 +93,15 @@ public class SyncService {
                 boolean existsRemote = remoteItems.stream().anyMatch(ri -> ri.name().equals(fileName));
 
                 if (!existsRemote) {
-                    // On utilise le path du dossier déduit plus haut pour l'upload
-                    String remoteFilePath = (remoteDirPath.endsWith("/") ? remoteDirPath : remoteDirPath + "/") + fileName;
-                    System.out.println("[SYNC] Nouveau fichier local détecté : " + fileName);
-                    api.uploadFile(tokenStore.get(), host,localFile.toString(), remoteFilePath, ftpUser, ftpPassword);
+                    // chemin distant construit proprement depuis currentRemotePath
+                    String remoteFilePath = (currentRemotePath.endsWith("/") ? currentRemotePath : currentRemotePath + "/") + fileName;
+                    System.out.println("[SYNC] Nouveau fichier local -> Upload : " + fileName);
+                    try {
+                        // on catch FileNotFoundException proprement
+                        api.uploadFile(tokenStore.get(), host, localFile.toString(), remoteFilePath, ftpUser, ftpPassword);
+                    } catch (Exception e) {
+                        System.out.println("[ERREUR] Upload échoué pour " + fileName + " : " + e.getMessage());
+                    }
                 }
             }
         } catch (IOException e) {
@@ -124,8 +134,18 @@ public class SyncService {
     public void syncServer(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
         if (remoteItems == null || remoteItems.isEmpty()) return;
 
+
+        String currentPath = "/";
+        if (!remoteItems.isEmpty()) {
+            String firstPath = remoteItems.get(0).path();
+            currentPath = firstPath.contains("/")
+                    ? firstPath.substring(0, firstPath.lastIndexOf("/"))
+                    : "/";
+            if (currentPath.isEmpty()) currentPath = "/";
+        }
+
         // Synchroniser les fichiers du dossier courant
-        syncMiroir(host, remoteItems, ftpUser, ftpPassword);
+        syncMiroir(host, currentPath, remoteItems, ftpUser, ftpPassword);
 
         // Explorer les sous-dossiers
         for (FtpItem item : remoteItems) {
