@@ -2,6 +2,7 @@ package univ.flopbox.api;
 
 import univ.flopbox.model.FtpItem;
 import univ.flopbox.model.LoginRequest;
+import univ.flopbox.model.RenameRequest;
 import univ.flopbox.model.Server;
 
 import java.io.FileNotFoundException;
@@ -85,4 +86,16 @@ public interface FlopboxApi {
      * @return un {@link CompletableFuture} se complétant une fois la suppression effectuée
      */
     CompletableFuture<Void> deleteFile(String token, String host, String remotePath, String ftpUser, String ftpPassword);
+
+    /**
+     * Renomme un fichier sur le serveur FTP distant via le proxy FlopBox.
+     *
+     * @param token       le token JWT de l'utilisateur authentifié
+     * @param host        l'hôte du serveur FTP cible
+     * @param renameRequest     l'ancien et le nouveau chemin du fichier sur le serveur FTP
+     * @param ftpUser     le nom d'utilisateur FTP
+     * @param ftpPassword le mot de passe FTP
+     * @return un {@link CompletableFuture} se complétant une fois le renommage effectué
+     */
+    CompletableFuture<Void> renameFile(String token, String host, RenameRequest renameRequest, String ftpUser, String ftpPassword);
 }

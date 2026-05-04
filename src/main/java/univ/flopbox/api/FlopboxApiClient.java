@@ -4,9 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import univ.flopbox.model.ApiResponse;
-import univ.flopbox.model.FtpItem;
-import univ.flopbox.model.LoginRequest;
+import univ.flopbox.model.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -29,7 +27,6 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import univ.flopbox.model.Server;
 import univ.flopbox.service.SyncService;
 import univ.flopbox.utils.HttpUtils;
 
@@ -100,6 +97,7 @@ public class FlopboxApiClient implements FlopboxApi {
             if (response.statusCode() != 200) {
                 throw new RuntimeException("Échec récupération serveurs : HTTP " + response.statusCode());
             }
+
 
             JsonNode dataNode = objectMapper.readTree(response.body()).path("data");
             return objectMapper.readValue(
@@ -263,5 +261,38 @@ public class FlopboxApiClient implements FlopboxApi {
                 });
     }
 
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Envoie une requête PATCH au proxy FlopBox avec un corps JSON
+     * {@code {"oldName": "...", "newName": "..."}} pour renommer le fichier.</p>
+     */
+    @Override
+    public CompletableFuture<Void> renameFile(String token, String host, RenameRequest renameRequest, String ftpUser, String ftpPassword) {
+        String url = BASE_URL + "/servers/" + host + "/files";
+        try {
+            String jsonBody = objectMapper.writeValueAsString(
+                    renameRequest
+            );
+            HttpRequest request = HttpUtils.createPatchRequest(url, token, jsonBody, ftpUser, ftpPassword);
+
+            return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200) {
+                            log.info("Fichier renommé sur le serveur : {} → {}", renameRequest.oldName(), renameRequest.newName());
+                        } else {
+                            log.warn("Renommage échoué HTTP {} : {} → {}", response.statusCode(), renameRequest.oldName(), renameRequest.newName());
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        log.error("Erreur async renommage {} → {} : {}", renameRequest.oldName(), renameRequest.newName(), ex.getMessage());
+                        return null;
+                    });
+        } catch (Exception e) {
+            log.error("Préparation renommage impossible : {}", e.getMessage());
+            return CompletableFuture.completedFuture(null);
+        }
+    }
 
 }

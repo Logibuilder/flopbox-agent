@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import univ.flopbox.api.FlopboxApi;
 import univ.flopbox.authService.TokenStore;
 import univ.flopbox.model.FtpItem;
+import univ.flopbox.model.RenameRequest;
 import univ.flopbox.model.Type;
 
 import java.io.IOException;
@@ -114,9 +115,18 @@ public class SyncService {
             Path localFile = localServerBase.resolve(cleanPath(remoteItem.path()));
             if (!Files.exists(localFile)) {
                 if (alreadySynced) {
-                    // Le serveur était déjà synchronisé → fichier supprimé localement
-                    log.info("Fichier supprimé localement, archivage vers .deleted/ : {}", remoteItem.name());
-                    moveToDeleted(host, remoteItem, ftpUser, ftpPassword);
+                    Path renamedFile = findRenamedLocalFile(localCurrentDir, remoteItem, remoteItems);
+                    if (renamedFile != null) {
+                        String newName = renamedFile.getFileName().toString();
+                        String newRemotePath = (remoteItem.path().contains("/")
+                                ? remoteItem.path().substring(0, remoteItem.path().lastIndexOf("/") + 1)
+                                : "/") + newName;
+                        log.info("Renommage détecté : {} → {}", remoteItem.name(), newName);
+                        api.renameFile(tokenStore.get(), host, new RenameRequest(remoteItem.path(), newRemotePath), ftpUser, ftpPassword).join();
+                    } else {
+                        log.info("Fichier supprimé localement, archivage vers .deleted/ : {}", remoteItem.name());
+                        moveToDeleted(host, remoteItem, ftpUser, ftpPassword);
+                    }
                 } else {
                     // Première synchronisation → téléchargement initial
                     log.info("Nouveau fichier distant à télécharger : {}", remoteItem.name());
@@ -256,4 +266,83 @@ public class SyncService {
             log.error("Déplacement vers .deleted/ échoué pour {} : {}", remoteItem.name(), e.getMessage());
         }
     }
+
+
+    /**
+     * Cherche si un fichier a été renommé localement.
+     * Version avec des boucles simples (sans Streams).
+     */
+    private Path findRenamedLocalFile(Path localCurrentDir, FtpItem remoteItem, List<FtpItem> remoteItems) {
+        if (!Files.exists(localCurrentDir)) {
+            return null; // Le dossier local n'existe même pas
+        }
+
+        // On récupère la date du fichier distant (en millisecondes)
+        long remoteTime;
+        try {
+            remoteTime = ZonedDateTime.parse(remoteItem.lastModified(), FTP_DATE_FORMAT)
+                    .toInstant().toEpochMilli();
+        } catch (Exception e) {
+            log.warn("Impossible de lire la date de {}", remoteItem.name());
+            return null;
+        }
+
+        // On récupère TOUS les fichiers du dossier local dans une liste
+        List<Path> localFiles;
+        try (var stream = Files.list(localCurrentDir)) {
+            localFiles = stream.toList();
+        } catch (IOException e) {
+            log.warn("Impossible de lister le dossier local : {}", localCurrentDir);
+            return null;
+        }
+
+        // On inspecte chaque fichier local un par un (le jeu des 4 indices)
+        for (Path localFile : localFiles) {
+
+            try {
+                // Est-ce bien un fichier (et pas un sous-dossier) ?
+                if (!Files.isRegularFile(localFile)) {
+                    continue; // On passe au suivant
+                }
+
+                // Est-ce qu'il a EXACTEMENT la même taille ?
+                if (Files.size(localFile) != remoteItem.size()) {
+                    continue; // On passe au suivant
+                }
+
+                // Est-ce qu'il a la même date de modification (à 2 secondes près) ?
+                long localTime = Files.getLastModifiedTime(localFile).toMillis();
+                if (Math.abs(localTime - remoteTime) > 2000) {
+                    continue; // On passe au suivant
+                }
+
+                // Est-ce que ce nom existe déjà sur le serveur ?
+                String localName = localFile.getFileName().toString();
+                boolean existsOnServer = false;
+
+                for (FtpItem ri : remoteItems) {
+                    if (ri.name().equals(localName)) {
+                        existsOnServer = true;
+                        break; // On arrête de chercher sur le serveur, on l'a trouvé
+                    }
+                }
+
+                if (existsOnServer) {
+                    continue; // Ce n'est pas notre fichier renommé, on passe au suivant
+                }
+
+                return localFile;
+
+            } catch (IOException e) {
+                // S'il y a un problème de lecture sur ce fichier précis, on l'ignore
+                log.warn("Impossible d'inspecter le fichier {}", localFile);
+            }
+        }
+
+        // Si on a fini la boucle sans rien trouver, c'est que le fichier n'a pas été renommé.
+        // Il a donc vraiment été supprimé.
+        return null;
+    }
+
+
 }

@@ -78,4 +78,26 @@ public class HttpUtils {
                 .GET()
                 .build();
     }
+
+    /**
+     * Crée une requête HTTP PATCH avec un corps JSON.
+     *
+     * @param url         l'URL de destination
+     * @param bearerToken le token JWT de l'utilisateur authentifié
+     * @param jsonBody    le corps JSON de la requête
+     * @param ftpUser     le nom d'utilisateur FTP (header {@code X-FTP-Username})
+     * @param ftpPassword le mot de passe FTP (header {@code X-FTP-Password})
+     * @return la requête HTTP PATCH configurée
+     */
+    public static HttpRequest createPatchRequest(String url, String bearerToken, String jsonBody, String ftpUser, String ftpPassword) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(DEFAULT_TIMEOUT)
+                .header("Authorization", "Bearer " + bearerToken)
+                .header("Content-Type", "application/json")
+                .header("X-FTP-Username", ftpUser)
+                .header("X-FTP-Password", ftpPassword)
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+    }
 }
