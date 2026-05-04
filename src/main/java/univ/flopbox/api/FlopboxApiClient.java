@@ -235,4 +235,33 @@ public class FlopboxApiClient implements FlopboxApi {
             return CompletableFuture.completedFuture(null);
         }
     }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Envoie une requête DELETE au proxy FlopBox pour supprimer définitivement
+     * le fichier au chemin {@code remotePath} sur le serveur FTP.</p>
+     */
+    @Override
+    public CompletableFuture<Void> deleteFile(String token, String host, String remotePath, String ftpUser, String ftpPassword) {
+        String encodedPath = URLEncoder.encode(remotePath, StandardCharsets.UTF_8);
+        String url = BASE_URL + "/servers/" + host + "/files?path=" + encodedPath;
+
+        HttpRequest request = HttpUtils.createDeleteRequest(url, token, ftpUser, ftpPassword);
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    if (response.statusCode() == 200 || response.statusCode() == 204) {
+                        log.info("Fichier supprimé sur le serveur : {}", remotePath);
+                    } else {
+                        log.warn("Suppression échouée HTTP {} pour {}", response.statusCode(), remotePath);
+                    }
+                })
+                .exceptionally(ex -> {
+                    log.error("Erreur async suppression de {} : {}", remotePath, ex.getMessage());
+                    return null;
+                });
+    }
+
+
 }

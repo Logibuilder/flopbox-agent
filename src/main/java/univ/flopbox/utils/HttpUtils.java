@@ -32,6 +32,31 @@ public class HttpUtils {
                 .build();
     }
 
+
+    /**
+     * Crée une requête HTTP DELETE pour supprimer un fichier sur le serveur FTP distant.
+     *
+     * <p>Les credentials FTP sont transmis via des headers personnalisés.
+     * Le chemin du fichier à supprimer est passé en paramètre de l'URL.</p>
+     *
+     * @param url         l'URL de destination de la requête (contient le chemin du fichier)
+     * @param bearerToken le token JWT de l'utilisateur authentifié
+     * @param ftpUser     le nom d'utilisateur FTP (header {@code X-FTP-Username})
+     * @param ftpPassword le mot de passe FTP (header {@code X-FTP-Password})
+     * @return la requête HTTP DELETE configurée
+     */
+    public static HttpRequest createDeleteRequest(String url, String bearerToken, String ftpUser, String ftpPassword) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(DEFAULT_TIMEOUT)
+                .header("Authorization", "Bearer " + bearerToken)
+                .header("X-FTP-Username", ftpUser)
+                .header("X-FTP-Password", ftpPassword)
+                .DELETE()
+                .build();
+    }
+
+
     public static HttpRequest createGetRequest(String url, String bearerToken) {
         return HttpRequest.newBuilder()
                 .uri(URI.create(url))

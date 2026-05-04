@@ -231,32 +231,29 @@ public class SyncService {
      */
     private void moveToDeleted(String host, FtpItem remoteItem, String ftpUser, String ftpPassword)  {
         String deletedRemotePath = "/.deleted/" + remoteItem.name();
-        Path tempFile = null;
 
         try {
-            // fichier temporaire pour void si c'est à supprimer
-            tempFile = Files.createTempFile("flopbox_deleted_", "_" + remoteItem.name());
+            // Chemin local où downloadFile écrit le fichier
+            Path localFilePath = Paths.get(ROOT_SYNC_DIR, host).resolve(cleanPath(remoteItem.path()));
 
-            // Télécharger le fichier distant vers le temp
-            // On crée un FtpItem pointant vers le temp localement
+            // Télécharger le fichier distant localement
             api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword).join();
 
-            // Uploader le fichier temporaire vers /.deleted/ sur le serveur
-            api.uploadFile(tokenStore.get(), host, tempFile.toString(), deletedRemotePath, ftpUser, ftpPassword).join();
-
-            log.info("Fichier archivé dans .deleted/ sur le serveur : {}", remoteItem.name());
-
-        } catch (Exception e ) {
-            log.error("Déplacement vers .deleted/ échoué pour {} : {}", remoteItem.name(), e.getMessage());
-        } finally {
-            // Nettoyer le fichier temporaire dans tous les cas
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException e) {
-                    log.warn("Suppression fichier temporaire échouée : {}", e.getMessage());
-                }
+            if (!Files.exists(localFilePath)) {
+                log.error("Fichier téléchargé introuvable localement : {}", localFilePath);
+                return;
             }
+
+            // Uploader vers /.deleted/ sur le serveur
+            api.uploadFile(tokenStore.get(), host, localFilePath.toString(), deletedRemotePath, ftpUser, ftpPassword).join();
+            log.info("Fichier archivé dans .deleted/ : {}", remoteItem.name());
+
+            // Supprimer le fichier à son emplacement d'origine sur le serveur
+            api.deleteFile(tokenStore.get(), host, remoteItem.path(), ftpUser, ftpPassword).join();
+            log.info("Fichier original supprimé du serveur : {}", remoteItem.path());
+
+        } catch (Exception e) {
+            log.error("Déplacement vers .deleted/ échoué pour {} : {}", remoteItem.name(), e.getMessage());
         }
     }
 }

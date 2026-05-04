@@ -73,4 +73,16 @@ public interface FlopboxApi {
      * @throws FileNotFoundException si le fichier local spécifié par {@code localPath} n'existe pas
      */
     CompletableFuture<Void> uploadFile(String token, String host, String localPath, String remotePath, String ftpUser, String ftpPassword) throws FileNotFoundException;
+
+    /**
+     * Supprime définitivement un fichier sur le serveur FTP distant.
+     *
+     * @param token       le token JWT de l'utilisateur authentifié
+     * @param host        l'hôte du serveur FTP cible
+     * @param remotePath  le chemin du fichier à supprimer sur le serveur FTP
+     * @param ftpUser     le nom d'utilisateur FTP
+     * @param ftpPassword le mot de passe FTP
+     * @return un {@link CompletableFuture} se complétant une fois la suppression effectuée
+     */
+    CompletableFuture<Void> deleteFile(String token, String host, String remotePath, String ftpUser, String ftpPassword);
 }
