@@ -74,8 +74,10 @@ public class SyncService {
 
         try {
             if (item.type() == Type.DIRECTORY) {
-                Files.createDirectories(localPath);
-                log.info("Dossier créé : {}", localPath);
+                if (!Files.exists(localPath)) {
+                    Files.createDirectories(localPath);
+                    log.info("Dossier créé : {}", localPath);
+                }
             } else {
                 Path parentDir = localPath.getParent();
                 if (parentDir != null) Files.createDirectories(parentDir);
@@ -99,7 +101,7 @@ public class SyncService {
      * @param currentRemotePath chemin du dossier distant en cours de traitement
      * @param remoteItems       contenu du dossier distant
      */
-    public void syncMiroir(String host, String currentRemotePath, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+    public void syncMiroir(String host, String currentRemotePath, List<FtpItem> remoteItems,Boolean alreadySynced, String ftpUser, String ftpPassword) {
         Path localServerBase = Paths.get(ROOT_SYNC_DIR, host);
         Path localCurrentDir = cleanPath(currentRemotePath).isEmpty()
                 ? localServerBase
@@ -111,8 +113,15 @@ public class SyncService {
 
             Path localFile = localServerBase.resolve(cleanPath(remoteItem.path()));
             if (!Files.exists(localFile)) {
-                log.info("Nouveau fichier distant à télécharger : {}", remoteItem.name());
-                api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword);
+                if (alreadySynced) {
+                    // Le serveur était déjà synchronisé → fichier supprimé localement
+                    log.info("Fichier supprimé localement, archivage vers .deleted/ : {}", remoteItem.name());
+                    moveToDeleted(host, remoteItem, ftpUser, ftpPassword);
+                } else {
+                    // Première synchronisation → téléchargement initial
+                    log.info("Nouveau fichier distant à télécharger : {}", remoteItem.name());
+                    api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword);
+                }
             } else {
                 compareAndSync(host, localFile, remoteItem, ftpUser, ftpPassword);
             }
@@ -176,10 +185,23 @@ public class SyncService {
     public void syncServer(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
         if (remoteItems == null || remoteItems.isEmpty()) return;
 
-        syncMiroir(host, deduceCurrentPath(remoteItems), remoteItems, ftpUser, ftpPassword);
+        syncMiroir(host, deduceCurrentPath(remoteItems), remoteItems,true, ftpUser, ftpPassword);
 
+        List<String> ignoredFolders = List.of(
+                "server_ftp_env", // Environnement Python
+                "__pycache__",    // Cache Python
+                ".deleted",       // Le dossier d'archivage des suppressions !
+                "target",         // Dossier de build Java
+                ".git",           // Historique Git
+                "node_modules"    // Dépendances Javascript (au cas où)
+        );
         for (FtpItem item : remoteItems) {
             if (item.type() == Type.DIRECTORY) {
+
+                if (ignoredFolders.contains(item.name())) {
+                    log.debug("Dossier lourd/inutile ignoré : {}", item.name());
+                    continue;
+                }
                 try {
                     log.info("Exploration du dossier : {}", item.path());
                     createDirectory(host, item);
@@ -187,6 +209,52 @@ public class SyncService {
                     syncServer(host, subItems, ftpUser, ftpPassword);
                 } catch (Exception e) {
                     log.warn("Dossier non accessible ou vide (ignoré) : {}", item.path());
+                }
+            }
+        }
+    }
+
+    /**
+     * Déplace un fichier vers {@code /.deleted/} sur le serveur FTP distant.
+     *
+     * <p>Comme l'API ne dispose pas de commande de déplacement direct, la méthode :
+     * <ol>
+     *   <li>Télécharge le fichier distant dans un fichier temporaire local.</li>
+     *   <li>L'uploade vers {@code /.deleted/nomDuFichier} sur le serveur.</li>
+     *   <li>Supprime le fichier temporaire.</li>
+     * </ol>
+     *
+     * @param host       hôte FTP cible
+     * @param remoteItem fichier distant à archiver dans {@code /.deleted/}
+     * @param ftpUser    nom d'utilisateur FTP
+     * @param ftpPassword mot de passe FTP
+     */
+    private void moveToDeleted(String host, FtpItem remoteItem, String ftpUser, String ftpPassword)  {
+        String deletedRemotePath = "/.deleted/" + remoteItem.name();
+        Path tempFile = null;
+
+        try {
+            // fichier temporaire pour void si c'est à supprimer
+            tempFile = Files.createTempFile("flopbox_deleted_", "_" + remoteItem.name());
+
+            // Télécharger le fichier distant vers le temp
+            // On crée un FtpItem pointant vers le temp localement
+            api.downloadFile(tokenStore.get(), host, remoteItem, ftpUser, ftpPassword).join();
+
+            // Uploader le fichier temporaire vers /.deleted/ sur le serveur
+            api.uploadFile(tokenStore.get(), host, tempFile.toString(), deletedRemotePath, ftpUser, ftpPassword).join();
+
+            log.info("Fichier archivé dans .deleted/ sur le serveur : {}", remoteItem.name());
+
+        } catch (Exception e ) {
+            log.error("Déplacement vers .deleted/ échoué pour {} : {}", remoteItem.name(), e.getMessage());
+        } finally {
+            // Nettoyer le fichier temporaire dans tous les cas
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException e) {
+                    log.warn("Suppression fichier temporaire échouée : {}", e.getMessage());
                 }
             }
         }
