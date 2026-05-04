@@ -262,6 +262,10 @@ public class SyncService {
             api.deleteFile(tokenStore.get(), host, remoteItem.path(), ftpUser, ftpPassword).join();
             log.info("Fichier original supprimé du serveur : {}", remoteItem.path());
 
+            // Supprimer le fichier local pour éviter qu'il soit re-uploadé dans le même cycle
+            Files.deleteIfExists(localFilePath);
+            log.info("Fichier local supprimé après archivage : {}", localFilePath);
+
         } catch (Exception e) {
             log.error("Déplacement vers .deleted/ échoué pour {} : {}", remoteItem.name(), e.getMessage());
         }
