@@ -8,6 +8,7 @@ import univ.flopbox.service.SyncService;
 
 import java.io.File;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public record ServerCredentialsConfig(
         @JsonProperty("servers") List<ServerCredentials> servers
@@ -25,13 +26,14 @@ public record ServerCredentialsConfig(
             // On recrée la liste en modifiant uniquement le serveur concerné
             List<ServerCredentials> updatedServers = currentConfig.servers().stream()
                     .map(s -> {
-                        if (s.host().equals(host) && !s.alreadySynced()) {
+                        // Évite le NullPointerException si alreadySynced est null
+                        if (s.host().equals(host) && !Boolean.TRUE.equals(s.alreadySynced())) {
                             // On crée un nouveau Record avec alreadySynced = true
                             return new ServerCredentials(s.host(), s.username(), s.password(), true);
                         }
                         return s;
                     })
-                    .toList();
+                    .collect(Collectors.toList());
 
             ServerCredentialsConfig newConfig = new ServerCredentialsConfig(updatedServers);
 

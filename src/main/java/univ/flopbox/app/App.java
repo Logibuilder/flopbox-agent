@@ -96,7 +96,7 @@ public class App {
 
         for (ServerCredentials server : config.servers()) {
 
-            AtomicBoolean isFirstSync = new AtomicBoolean(server.alreadySynced());
+            AtomicBoolean isFirstSync = new AtomicBoolean(!Boolean.TRUE.equals(server.alreadySynced()));
             // On planifie un cycle toutes les 60 secondes pour ce serveur
             scheduler.scheduleAtFixedRate(() -> {
                 try {
