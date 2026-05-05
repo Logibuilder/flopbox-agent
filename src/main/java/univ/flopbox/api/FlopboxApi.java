@@ -98,4 +98,17 @@ public interface FlopboxApi {
      * @return un {@link CompletableFuture} se complétant une fois le renommage effectué
      */
     CompletableFuture<Void> renameFile(String token, String host, RenameRequest renameRequest, String ftpUser, String ftpPassword);
+
+
+    /**
+     * Crée un répertoire sur le serveur FTP distant via le proxy FlopBox.
+     *
+     * @param token       le token JWT de l'utilisateur authentifié
+     * @param host        l'hôte du serveur FTP cible
+     * @param path        le chemin du dossier à créer (ex: "/.deleted")
+     * @param ftpUser     le nom d'utilisateur FTP
+     * @param ftpPassword le mot de passe FTP
+     * @return un {@link CompletableFuture} se complétant une fois l'opération terminée
+     */
+    CompletableFuture<Void> createRemoteDirectory(String token, String host, String path, String ftpUser, String ftpPassword);
 }

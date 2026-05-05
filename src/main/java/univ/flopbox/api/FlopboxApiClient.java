@@ -295,4 +295,28 @@ public class FlopboxApiClient implements FlopboxApi {
         }
     }
 
+
+    @Override
+    public CompletableFuture<Void> createRemoteDirectory(String token, String host, String path, String ftpUser, String ftpPassword) {
+        String encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8);
+        // On suppose que le contrôleur est mappé sur /servers/{host}/directories
+        String url = BASE_URL + "/servers/" + host + "/directories?path=" + encodedPath;
+
+        HttpRequest request = HttpUtils.createPostRequest(url, token, ftpUser, ftpPassword);
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    if (response.statusCode() == 200 || response.statusCode() == 201) {
+                        log.info("Dossier distant créé sur le serveur : {}", path);
+                    } else {
+                        // On loggue en 'debug' car si le dossier existe déjà, le serveur va logiquement refuser la création.
+                        log.debug("Création du dossier distant ignorée (il existe probablement déjà) HTTP {}", response.statusCode());
+                    }
+                })
+                .exceptionally(ex -> {
+                    log.error("Erreur de requête pour la création du dossier {} : {}", path, ex.getMessage());
+                    return null;
+                });
+    }
+
 }

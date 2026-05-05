@@ -32,6 +32,17 @@ public class HttpUtils {
                 .build();
     }
 
+    public static HttpRequest createPostRequest(String url, String bearerToken, String ftpUser, String ftpPassword ) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(DEFAULT_TIMEOUT)
+                .header("Authorization", "Bearer " + bearerToken)
+                .header("X-FTP-Username", ftpUser)
+                .header("X-FTP-Password", ftpPassword)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+    }
+
 
     /**
      * Crée une requête HTTP DELETE pour supprimer un fichier sur le serveur FTP distant.

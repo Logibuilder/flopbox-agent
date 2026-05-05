@@ -196,6 +196,16 @@ public class SyncService {
     public void syncServer(String host, List<FtpItem> remoteItems,Boolean alreadSynced, String ftpUser, String ftpPassword) {
         if (remoteItems == null || remoteItems.isEmpty()) return;
 
+
+        //  on s'assure que le dossier /.deleted existe sur le serveur
+        try {
+            if (!alreadSynced) {
+                api.createRemoteDirectory(tokenStore.get(), host, "/.deleted", ftpUser, ftpPassword).join();
+            }
+        } catch (Exception e) {
+            log.warn("Impossible de vérifier/créer le dossier /.deleted sur le serveur : {}", e.getMessage());
+        }
+
         int currentDepth = 0;
 
         syncServerBis(host, remoteItems, alreadSynced,currentDepth + 1, ftpUser, ftpPassword);
