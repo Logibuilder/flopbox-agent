@@ -11,6 +11,7 @@ import univ.flopbox.config.Log;
 import univ.flopbox.config.ServerCredentials;
 import univ.flopbox.config.ServerCredentialsConfig;
 import univ.flopbox.model.FtpItem;
+import univ.flopbox.service.CorbeilService;
 import univ.flopbox.service.DirectoryService;
 import univ.flopbox.service.SyncService;
 
@@ -108,7 +109,7 @@ public class App {
                     );
 
                     // Lance la synchronisation récursive
-                    syncService.syncServer(server.host(), remoteItems,server.alreadySynced(), server.username(), server.password());
+                    syncService.syncServer(server.host(), remoteItems, !isFirstSync.get(), server.username(), server.password());
 
                     // Si c'était le premier cycle, on met à jour le fichier config.json
                     if (isFirstSync.get()) {
@@ -122,5 +123,10 @@ public class App {
                 }
             }, 0, 60, TimeUnit.SECONDS);
         }
+
+        CorbeilService corbeilService = new CorbeilService(
+                api, tokenStore, directoryService, config, scheduler
+        );
+        corbeilService.start();
     }
 }
