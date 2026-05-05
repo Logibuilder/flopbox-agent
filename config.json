@@ -1,0 +1,16 @@
+{
+  "servers": [
+    {
+      "host": "localhost",
+      "username": "anonymous",
+      "password": "anonymous",
+      "alreadySynced": false
+    },
+    {
+      "host": "ftp.free.fr",
+      "username": "anonymous",
+      "password": "",
+      "alreadySynced": false
+    }
+  ]
+}

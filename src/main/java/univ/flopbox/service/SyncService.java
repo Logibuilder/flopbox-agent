@@ -29,6 +29,7 @@ public class SyncService {
 
     private static final Logger log = LoggerFactory.getLogger(SyncService.class);
     private static final String ROOT_SYNC_DIR = "flopbox_data";
+    private static final int MAX_DEPTH = 10;
     private static final DateTimeFormatter FTP_DATE_FORMAT =
             DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
 
@@ -192,11 +193,33 @@ public class SyncService {
      * @param host        hôte FTP cible
      * @param remoteItems contenu du dossier courant à synchroniser
      */
-    public void syncServer(String host, List<FtpItem> remoteItems, String ftpUser, String ftpPassword) {
+    public void syncServer(String host, List<FtpItem> remoteItems,Boolean alreadSynced, String ftpUser, String ftpPassword) {
         if (remoteItems == null || remoteItems.isEmpty()) return;
 
-        syncMiroir(host, deduceCurrentPath(remoteItems), remoteItems,true, ftpUser, ftpPassword);
+        int currentDepth = 0;
 
+        syncServerBis(host, remoteItems, alreadSynced,currentDepth + 1, ftpUser, ftpPassword);
+    }
+
+    /**
+     *
+     * @param host
+     * @param remoteItems
+     * @param currentDepth definit la profondeur de syncronisation
+     * @param ftpUser
+     * @param ftpPassword
+     */
+    public void syncServerBis(String host, List<FtpItem> remoteItems, Boolean alreadySynced,int currentDepth, String ftpUser, String ftpPassword) {
+        if (remoteItems == null || remoteItems.isEmpty()) return;
+
+        syncMiroir(host, deduceCurrentPath(remoteItems), remoteItems,alreadySynced, ftpUser, ftpPassword);
+
+
+        // on définit une condition d'arrêt pour limiter le nombre de sous dossier
+        if (currentDepth >= MAX_DEPTH) {
+            log.info("Profondeur maximale ({}) atteinte, on ignore les sous-dossiers de : {}", MAX_DEPTH, deduceCurrentPath(remoteItems));
+            return;
+        }
         List<String> ignoredFolders = List.of(
                 "server_ftp_env", // Environnement Python
                 "__pycache__",    // Cache Python
@@ -216,7 +239,7 @@ public class SyncService {
                     log.info("Exploration du dossier : {}", item.path());
                     createDirectory(host, item);
                     List<FtpItem> subItems = api.listDirectory(tokenStore.get(), host, item.path(), ftpUser, ftpPassword);
-                    syncServer(host, subItems, ftpUser, ftpPassword);
+                    syncServerBis(host, subItems,alreadySynced,currentDepth + 1, ftpUser, ftpPassword);
                 } catch (Exception e) {
                     log.warn("Dossier non accessible ou vide (ignoré) : {}", item.path());
                 }
@@ -314,7 +337,7 @@ public class SyncService {
                     continue; // On passe au suivant
                 }
 
-                // Est-ce qu'il a la même date de modification (à 2 secondes près) ?
+                // Est-ce qu'il a la même date de modification (à 2 secondes près)
                 long localTime = Files.getLastModifiedTime(localFile).toMillis();
                 if (Math.abs(localTime - remoteTime) > 2000) {
                     continue; // On passe au suivant
