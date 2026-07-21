@@ -1,3 +1,5 @@
+![flopbox_agent_avatar](doc/flopbox_agent_avatar.jpg)
+
 # FlopBox Client – Agent de synchronisation multi-serveurs
 
 Application cliente Java en console qui synchronise automatiquement des serveurs FTP distants via la plateforme FlopBox, et offre un mode interactif de gestion de la corbeille distante.
